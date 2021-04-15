@@ -29,7 +29,7 @@ def test_zmq_push_block():
         assert False
 
     print("c1 join")
-    w1 = c1.subscribe(topic)
+    w1 = c1.subscribe(topic, False)
     for i in range(DEFAULT_HWM):
         c0.push(topic, data, ipc=False)
     print(f"{DEFAULT_HWM} items pushed")
@@ -45,7 +45,7 @@ def test_zmq_push_block():
     assert res == data
 
     print("c2 join")
-    w2 = c2.subscribe(topic)
+    w2 = c2.subscribe(topic, False)
     time.sleep(1)
     print("hwm block: push more items")
     for i in range(DEFAULT_HWM * 3):
@@ -74,7 +74,7 @@ def _producer(topic, idx):
 
 def _consumer(topic, idx, sem):
     c = perwez.connect("default")
-    w = c.subscribe(topic)
+    w = c.subscribe(topic, False)
     while True:
         res = w.get()
         print(idx, res[0])

@@ -8,7 +8,7 @@ import perwez
 
 def _data_fetcher():
     pwz = perwez.connect("default")
-    data_watcher = pwz.subscribe("data")
+    data_watcher = pwz.subscribe("data", False)
     cnt = 0
     while True:
         latest_res = data_watcher.get()

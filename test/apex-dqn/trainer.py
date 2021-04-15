@@ -20,7 +20,7 @@ EXITED = False
 
 def data_fetcher_main():
     perwez_client = perwez.connect()
-    data_watcher = perwez_client.subscribe("data")
+    data_watcher = perwez_client.subscribe("data", False)
     rb_clients = [reth_buffer.connect(f"rb{i}") for i in range(BUFFER_SHARDS)]
     step = 0
     while True:
@@ -38,7 +38,7 @@ def trainer_main(config):
     ts = 0
     while True:
         ts += 1
-        if trainer.cur_time > 36000:
+        if trainer.cur_time > 3600 * 40:
             return
         rb_client = rb_clients[ts % BUFFER_SHARDS]
         *data, indices, weights = rb_client.sample()

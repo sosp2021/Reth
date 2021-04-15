@@ -21,7 +21,7 @@ BUFFER_SHARDS = 1
 def worker_main(config, idx):
     rb_clients = [reth_buffer.connect(f"rb{i}") for i in range(BUFFER_SHARDS)]
     perwez_client = perwez.connect()
-    weight_watcher = perwez_client.subscribe("weight")
+    weight_watcher = perwez_client.subscribe("weight", True)
 
     batch_size = config["common"]["batch_size"]
     num_workers = config["common"]["num_workers"]
@@ -67,7 +67,7 @@ def trainer_main(config):
     ts = 0
     while True:
         ts += 1
-        if trainer.cur_time > 3600:
+        if trainer.cur_time > 3600 * 10:
             return
         rb_client = rb_clients[ts % BUFFER_SHARDS]
         *data, indices, weights = rb_client.sample()

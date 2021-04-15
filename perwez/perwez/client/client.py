@@ -149,7 +149,7 @@ class Client:
 
     def _sio_poller(self, init_ev):
         self._info_sock = self.ctx.socket(zmq.PUB)
-        self._info_sock.set_hwm(DEFAULT_HWM)
+        self._info_sock.setsockopt(zmq.CONFLATE, 1)
         self._info_sock.bind(INPROC_INFO_ADDR)
         self.sio_client.connect(self.server_config["url"], transports="websocket")
         init_ev.set()
@@ -181,10 +181,10 @@ class Client:
             zmq.PUSH, topic, data, ipc, noblock, conflate, compression, **compression_args
         )
 
-    def subscribe(self, topic, sub_conflate=True):
+    def subscribe(self, topic, conflate):
         with self._info_lock:
             watcher = Watcher(
-                self.ctx, topic, sub_conflate, self.endpoint_info.get(topic)
+                self.ctx, topic, conflate, self.endpoint_info.get(topic)
             )
         self.watchers.add(watcher)
         return watcher

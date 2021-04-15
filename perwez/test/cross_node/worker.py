@@ -14,7 +14,7 @@ PARENT_IP = os.environ.get("PAI_HOST_IP_trainer_0")
 
 def _worker(worker_idx):
     pwz = perwez.connect("default")
-    weight_watcher = pwz.subscribe("weight")
+    weight_watcher = pwz.subscribe("weight", True)
 
     env = reth.env.make(ENV_NAME)
     buffer = reth.buffer.NumpyBuffer(WORKER_BATCH_SIZE, circular=False)

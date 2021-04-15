@@ -24,7 +24,7 @@ def serialize_data(data, compression=None, packer=None, **compression_args):
                     "data": item.data,
                     "size": item.nbytes,
                     "type": "numpy",
-                    "ts": time.monotonic(),
+                    "ts": time.time(),
                 }
             )
         else:
@@ -34,7 +34,7 @@ def serialize_data(data, compression=None, packer=None, **compression_args):
                     "data": view,
                     "size": len(view),
                     "type": "bytes",
-                    "ts": time.monotonic(),
+                    "ts": time.time(),
                 }
             )
     if flag_value:

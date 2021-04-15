@@ -12,9 +12,9 @@ WORKER_CNT = int(os.environ.get(f"PAI_TASK_ROLE_TASK_COUNT_{WORKER_ROLE_NAME}"))
 TRAINER_ENDPOINT = f"{TRAINER_ROLE_NAME}-0"
 WORKER_ENDPOINTS = [f"{WORKER_ROLE_NAME}-{i}" for i in range(WORKER_CNT)]
 
-WORKER_COMMAND = "python ~/reth/test/apex-dqn/worker.py -r {} -s {} -b {}"
+WORKER_COMMAND = "python -u ~/reth/test/apex-dqn/worker.py -r {} -s {} -b {}"
 
-TRAINER_COMMAND = "python ~/reth/test/apex-dqn/trainer.py -p {}"
+TRAINER_COMMAND = "python -u ~/reth/test/apex-dqn/trainer.py -p {}"
 
 QUEUE = asyncio.Queue()
 

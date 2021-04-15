@@ -27,7 +27,7 @@ def worker_main(config, idx):
     reverb_client = reverb.Client(f"localhost:{PORT}")
     reverb_writer = reverb_client.writer(1)
     perwez_client = perwez.connect()
-    weight_watcher = perwez_client.subscribe("weight")
+    weight_watcher = perwez_client.subscribe("weight", True)
 
     batch_size = config["common"]["batch_size"]
     num_workers = config["common"]["num_workers"]

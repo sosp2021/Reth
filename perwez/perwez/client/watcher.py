@@ -10,7 +10,7 @@ from ..utils import DEFAULT_HWM, INPROC_INFO_ADDR, INPROC_WATCHER_PREFIX
 
 class WatcherZmqLoop:
     def __init__(
-        self, ctx, topic, watcher_sock_id, sub_conflate=True, init_endpoints=None
+        self, ctx, topic, watcher_sock_id, conflate=True, init_endpoints=None
     ):
         self.ctx = ctx
         self.topic = topic
@@ -23,10 +23,10 @@ class WatcherZmqLoop:
             self.socks[sock_type].set_hwm(DEFAULT_HWM)
             if sock_type == zmq.SUB:
                 self.socks[sock_type].subscribe("")
-                if sub_conflate:
-                    self.socks[sock_type].setsockopt(zmq.CONFLATE, 1)
+            if conflate:
+                self.socks[sock_type].setsockopt(zmq.CONFLATE, 1)
         self.info_sock = self.ctx.socket(zmq.SUB)
-        self.info_sock.set_hwm(DEFAULT_HWM)
+        self.info_sock.setsockopt(zmq.CONFLATE, 1)
         self.info_sock.subscribe("")
         self.info_sock.connect(INPROC_INFO_ADDR)
 
@@ -34,6 +34,8 @@ class WatcherZmqLoop:
 
         self.dst_sock = self.ctx.socket(zmq.PUSH)
         self.dst_sock.set_hwm(1)
+        if conflate:
+            self.dst_sock.setsockopt(zmq.CONFLATE, 1)
         self.dst_sock.connect(watcher_sock_id)
 
         for info in self.endpoints:
@@ -70,7 +72,7 @@ class WatcherZmqLoop:
 
 
 class Watcher:
-    def __init__(self, ctx, topic, sub_conflate=True, init_endpoints=None):
+    def __init__(self, ctx, topic, conflate=True, init_endpoints=None):
         self.id = f"{os.getpid()}-{topic}-{str(uuid.uuid4())[:6]}"
         self.ctx = ctx
         self.topic = topic
@@ -78,6 +80,8 @@ class Watcher:
         self.watcher_sock_id = INPROC_WATCHER_PREFIX + self.id
         self.watcher_sock = self.ctx.socket(zmq.PULL)
         self.watcher_sock.set_hwm(1)
+        if conflate:
+            self.watcher_sock.setsockopt(zmq.CONFLATE, 1)
         self.watcher_sock.bind(self.watcher_sock_id)
 
         init_ev = threading.Event()
@@ -89,7 +93,7 @@ class Watcher:
                 ctx,
                 topic,
                 self.watcher_sock_id,
-                sub_conflate,
+                conflate,
                 init_endpoints,
             ),
             daemon=True,
@@ -98,10 +102,10 @@ class Watcher:
         init_ev.wait()
 
     def _worker_thread(
-        self, init_ev, ctx, topic, watcher_sock_id, sub_conflate, init_endpoints
+        self, init_ev, ctx, topic, watcher_sock_id, conflate, init_endpoints
     ):
         self.worker = WatcherZmqLoop(
-            ctx, topic, watcher_sock_id, sub_conflate, init_endpoints
+            ctx, topic, watcher_sock_id, conflate, init_endpoints
         )
         init_ev.set()
         self.worker.run()

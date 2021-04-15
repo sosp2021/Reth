@@ -6,10 +6,12 @@ import io
 import multiprocessing as mp
 import os.path as path
 import signal
+import time
 
 import numpy as np
 import perwez
 import yaml
+from loguru import logger
 from reth.presets.config import get_solver, get_worker
 from reth.utils import getLogger
 
@@ -18,7 +20,7 @@ EXITED = False
 
 def worker_main(config, idx, size):
     perwez_client = perwez.connect()
-    weights_watcher = perwez_client.subscribe("local-weights")
+    weights_watcher = perwez_client.subscribe("local-weights", conflate=True)
 
     batch_size = config["common"]["rollout_batch_size"]
     eps = 0.4 ** (1 + (idx / (size - 1)) * 7)
@@ -26,12 +28,22 @@ def worker_main(config, idx, size):
     worker = get_worker(
         config, exploration=eps, solver=solver, logger=getLogger(f"worker{idx}")
     )
-
+    weight_ts = time.monotonic()
+    weight_offset = []
+    prev_load = 0
     while True:
         # load weights
-        if not weights_watcher.empty():
-            res = weights_watcher.get()
-            worker.load_weights(io.BytesIO(res))
+        if (worker.cur_step - prev_load) > 400 and not weights_watcher.empty():
+            meta = weights_watcher.get(return_meta=True)
+            prev_load = worker.cur_step
+            worker.load_weights(io.BytesIO(meta["data"]))
+            weight_offset.append(time.time() - meta["ts"])
+            dur = time.monotonic() - weight_ts
+            if dur > 60:
+                logger.info(f'load weights {len(weight_offset) / dur:.2f}/s, avg offset {sum(weight_offset) / len(weight_offset)}', flush=True)
+                weight_ts = time.monotonic()
+                weight_offset = []
+
 
         # step
         data = worker.step_batch(batch_size)
@@ -52,7 +64,7 @@ def worker_main(config, idx, size):
 
 def weights_proxy():
     c = perwez.connect()
-    w = c.subscribe("weights")
+    w = c.subscribe("weights", True)
     while True:
         res = w.get()
         c.publish("local-weights", res)
