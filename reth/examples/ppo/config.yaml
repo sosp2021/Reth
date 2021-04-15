@@ -1,0 +1,12 @@
+env:
+  name: CartPole-v0
+solver:
+  name: 'ppo'
+  k_epochs: 4
+  eps_clip: 0.2
+  learning_rate: 0.01
+trainer:
+  print_interval: 10
+worker:
+  print_interval: 100e
+  exploration: 1,0.01,30000

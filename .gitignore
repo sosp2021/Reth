@@ -1,0 +1,12 @@
+Include
+Lib
+Scripts
+build
+dist
+*.egg-info
+
+pyvenv.cfg
+.vscode
+*.pyc
+
+weights.bin

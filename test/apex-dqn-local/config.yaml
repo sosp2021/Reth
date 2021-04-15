@@ -1,0 +1,24 @@
+common:
+  batch_size: 512
+  num_workers: 4
+  sync_weights_interval: 100
+env:
+  name: PongNoFrameskip-v4
+solver:
+  name: 'dqn'
+  clip_value: 40
+  double_q: True
+  dueling: True
+  gamma: 0.99
+  learning_rate: 0.00005
+  update_target_interval: 300
+worker:
+  exploration: 0 #per_worker_epsilon_greedy
+  print_interval: 5000
+trainer:
+  print_interval: 1000
+replay_buffer:
+  prioritized: True
+  alpha: 0.6
+  beta: 0.4
+  capacity: 500000

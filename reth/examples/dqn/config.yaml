@@ -1,0 +1,20 @@
+env:
+  name: CartPole-v0
+solver:
+  name: 'dqn'
+  gamma: 0.99
+  clip_value: 40
+  double_q: True
+  dueling: True
+  learning_rate: 0.0001
+  update_target_interval: 200
+trainer:
+  print_interval: 100
+worker:
+  print_interval: 1000
+  exploration: 1,0.01,100000
+replay_buffer:
+  prioritized: True
+  beta: 0.4,1,100000
+  alpha: 0.6
+  capacity: 100000
