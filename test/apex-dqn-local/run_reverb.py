@@ -23,11 +23,10 @@ TABLE_NAME = "reverb_test"
 PORT = 19133
 
 
-def worker_main(config, idx):
+def worker_main(perwez_url, config, idx):
     reverb_client = reverb.Client(f"localhost:{PORT}")
     reverb_writer = reverb_client.writer(1)
-    perwez_client = perwez.connect()
-    weight_watcher = perwez_client.subscribe("weight", True)
+    weight_recv = perwez.RecvSocket(perwez_url, "weight", broadcast=True)
 
     batch_size = config["common"]["batch_size"]
     num_workers = config["common"]["num_workers"]
@@ -43,8 +42,8 @@ def worker_main(config, idx):
 
     while True:
         # load weights
-        if not weight_watcher.empty():
-            worker.load_weights(io.BytesIO(weight_watcher.get()))
+        if not weight_recv.empty():
+            worker.load_weights(io.BytesIO(weight_recv.recv()))
 
         # step
         data = worker.step_batch(batch_size)
@@ -84,8 +83,8 @@ def _reverb_samples_to_ndarray(samples):
     return res, indices, weights
 
 
-def trainer_main_np_client(config):
-    perwez_client = perwez.connect()
+def trainer_main_np_client(perwez_url, config):
+    weight_send = perwez.SendSocket(perwez_url, "weight", broadcast=True)
     # init reverb
     reverb_client = reverb.Client(f"localhost:{PORT}")
 
@@ -106,11 +105,11 @@ def trainer_main_np_client(config):
         )
 
         if ts % sync_weights_interval == 0:
-            perwez_client.publish("weight", trainer.save_weights().getbuffer())
+            weight_send.send(trainer.save_weights().getbuffer())
 
 
-def trainer_main_tf_dataset(config):
-    perwez_client = perwez.connect()
+def trainer_main_tf_dataset(perwez_url, config):
+    weight_send = perwez.SendSocket(perwez_url, "weight", broadcast=True)
     # init reverb
     reverb_client = reverb.Client(f"localhost:{PORT}")
     # reverb dataset
@@ -160,7 +159,7 @@ def trainer_main_tf_dataset(config):
         )
 
         if ts % sync_weights_interval == 0:
-            perwez_client.publish("weight", trainer.save_weights().getbuffer())
+            weight_send.send(trainer.save_weights().getbuffer())
 
 
 def main():
@@ -170,7 +169,7 @@ def main():
         config = yaml.safe_load(f)
 
     # init perwez
-    server_proc, _ = perwez.start_server()
+    pwz_proc, pwz_config = perwez.start_server()
     # init reverb_server
     reverb.Server(
         tables=[
@@ -192,7 +191,7 @@ def main():
         p = mp.Process(
             name=f"apex-worker-{idx}",
             target=worker_main,
-            args=(config, idx),
+            args=(pwz_config["url"], config, idx),
             daemon=True,
         )
         p.start()
@@ -200,14 +199,14 @@ def main():
 
     # trainer process should be the main process
     try:
-        trainer_main_tf_dataset(config)
+        trainer_main_tf_dataset(pwz_config["url"], config)
     finally:
         print("exiting...")
         for p in worker_processes:
             p.terminate()
             p.join()
-        server_proc.terminate()
-        server_proc.join()
+        pwz_proc.terminate()
+        pwz_proc.join()
 
 
 if __name__ == "__main__":

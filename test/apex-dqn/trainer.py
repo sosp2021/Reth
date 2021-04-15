@@ -13,76 +13,62 @@ import reth_buffer
 import yaml
 from reth.presets.config import get_trainer
 
-BUFFER_SHARDS = 4
-DATA_FETCHER_PROCS = 8
 EXITED = False
 
 
-def data_fetcher_main():
-    perwez_client = perwez.connect()
-    data_watcher = perwez_client.subscribe("data", False)
-    rb_clients = [reth_buffer.connect(f"rb{i}") for i in range(BUFFER_SHARDS)]
-    step = 0
-    while True:
-        step += 1
-        rb_client = rb_clients[step % BUFFER_SHARDS]
-        s0, a, r, s1, done, loss = data_watcher.get()
-        rb_client.append(s0, a, r, s1, done, weights=loss)
-
-
-def trainer_main(config):
-    perwez_client = perwez.connect()
-    rb_clients = [reth_buffer.connect(f"rb{i}") for i in range(BUFFER_SHARDS)]
+def trainer_main(config, perwez_url, rb_addrs):
+    weights_send = perwez.SendSocket(perwez_url, "weights", broadcast=True)
+    rb_clients = [reth_buffer.Client(addr) for addr in rb_addrs]
+    rb_loaders = [
+        reth_buffer.TorchCudaLoader(addr, buffer_size=4, num_procs=2)
+        for addr in rb_addrs
+    ]
     trainer = get_trainer(config)
-    sync_weights_interval = config["common"]["sync_weights_interval"]
+    send_weights_interval = config["common"]["send_weights_interval"]
     ts = 0
     while True:
         ts += 1
         if trainer.cur_time > 3600 * 40:
             return
-        rb_client = rb_clients[ts % BUFFER_SHARDS]
-        *data, indices, weights = rb_client.sample()
+        idx = ts % len(rb_clients)
+        data, indices, weights = rb_loaders[idx].sample()
         loss = trainer.step(data, weights=weights)
-        rb_client.update_priorities(np.asarray(indices), np.asarray(loss))
+        rb_clients[idx].update_priorities(np.asarray(indices), np.asarray(loss))
 
-        if ts % sync_weights_interval == 0:
+        if ts % send_weights_interval == 0:
             stream = io.BytesIO()
             trainer.save_weights(stream)
-            perwez_client.publish("weights", stream.getbuffer(), ipc=False)
+            weights_send.send(stream.getbuffer())
 
 
-def main(port):
+def main(perwez_port, rb_ports):
     mp.set_start_method("spawn", force=True)
     config_path = path.join(path.dirname(__file__), "config.yaml")
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
-    perwez_proc, _ = perwez.start_server(port=port)
+    perwez_proc, perwez_config = perwez.start_server(port=perwez_port)
     rb_procs = []
-    for i in range(BUFFER_SHARDS):
-        p, _ = reth_buffer.start_server(
-            name=f"rb{i}",
-            buffer_capacity=config["replay_buffer"]["capacity"] // BUFFER_SHARDS,
-            buffer_alpha=config["replay_buffer"]["alpha"],
-            buffer_beta=config["replay_buffer"]["beta"],
+    rb_addrs = []
+    for port in rb_ports:
+        proc, addr = reth_buffer.start_per(
+            capacity=config["replay_buffer"]["capacity"] // len(rb_ports),
+            alpha=config["replay_buffer"]["alpha"],
+            beta=config["replay_buffer"]["beta"],
             batch_size=config["common"]["batch_size"],
+            port=port,
         )
-        rb_procs.append(p)
-    data_fetcher_procs = []
-    for _ in range(DATA_FETCHER_PROCS):
-        p = mp.Process(target=data_fetcher_main)
-        p.start()
-        data_fetcher_procs.append(p)
+        rb_procs.append(proc)
+        rb_addrs.append(addr)
 
-    trainer_proc = mp.Process(target=trainer_main, args=(config,))
+    trainer_proc = mp.Process(
+        target=trainer_main, args=(config, perwez_config["url"], rb_addrs)
+    )
 
     def graceful_exit(*_):
         global EXITED
         if not EXITED:
             EXITED = True
             print("exiting...")
-            for p in data_fetcher_procs:
-                p.terminate()
-                p.join()
             for p in rb_procs:
                 p.terminate()
                 p.join()
@@ -101,6 +87,7 @@ def main(port):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--port", required=True)
+    parser.add_argument("-p", "--perwez_port", required=True)
+    parser.add_argument("-rb", "--rb_ports", required=True, nargs="*")
     args = parser.parse_args()
-    main(args.port)
+    main(args.perwez_port, args.rb_ports)

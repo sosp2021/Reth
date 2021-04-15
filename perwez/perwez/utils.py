@@ -1,4 +1,6 @@
-import os
+import threading
+from functools import lru_cache
+from urllib.parse import urljoin
 
 import psutil
 import requests
@@ -10,23 +12,10 @@ from tenacity import (
     wait_fixed,
 )
 
-DEFAULT_HWM = 5
-DEFAULT_ZMQ_IO_THREADS = 4
-ROOT_DIR_PREFIX = os.path.expanduser("~/.perwez_")
-INPROC_INFO_ADDR = "inproc://perwez-endpoints"
-INPROC_WATCHER_PREFIX = "inproc://perwez-watcher-"
+DEFAULT_ZMQ_IO_THREADS = 1
 
-
-def get_root_dir(name):
-    return ROOT_DIR_PREFIX + name
-
-
-def get_config_path(name):
-    return os.path.join(get_root_dir(name), "config.json")
-
-
-def get_lock_path(name):
-    return get_root_dir(name) + "_lock"
+HEARTBEAT_INTERVAL = 1200
+HEARTBEAT_TIMEOUT = HEARTBEAT_INTERVAL * 1.5
 
 
 def get_local_ip():
@@ -39,7 +28,7 @@ class RetryException(Exception):
     pass
 
 
-def _ping_server_inner(url, pid=None):
+def _ping_url_inner(url, pid=None):
     if pid is not None and not psutil.pid_exists(pid):
         raise Exception(f"Server with pid {pid} doesn't exist")
 
@@ -52,11 +41,22 @@ def _ping_server_inner(url, pid=None):
     return res
 
 
-def ping_server(url, pid=None, timeout=3):
+def ping_url(url, pid=None, timeout=3):
     retryer = Retrying(
         stop=stop_after_delay(timeout),
         wait=wait_fixed(0.2),
         retry=retry_if_exception_type(RetryException),
         reraise=True,
     )
-    retryer(_ping_server_inner, url, pid)
+    res = retryer(_ping_url_inner, url, pid)
+    return res.json()
+
+
+GET_CONFIG_LOCK = threading.Lock()
+
+
+@lru_cache(maxsize=32)
+def get_server_config(server_url):
+    with GET_CONFIG_LOCK:
+        config = ping_url(urljoin(server_url, "/echo"))
+        return config

@@ -25,6 +25,7 @@ class DQNSolver(Algorithm):
         adam_epsilon=1e-8,
         update_target_interval=150,
         device=None,
+        n_step=1,
     ):
         super().__init__(device)
 
@@ -53,6 +54,7 @@ class DQNSolver(Algorithm):
         self.clip_value = clip_value
         self.double_q = double_q
         self.gamma = gamma
+        self.n_step = n_step
         if update_target_interval is not None:
             self._update_target_interval = Interval(
                 self.update_target, update_target_interval
@@ -91,7 +93,7 @@ class DQNSolver(Algorithm):
             ).float()
             next_q_best = torch.sum(next_q_values * best_one_hot_selection, 1)
 
-        expected_q_value = r + self.gamma * next_q_best * (1 - done)
+        expected_q_value = r + (self.gamma ** self.n_step) * next_q_best * (1 - done)
         td_error = q_values - expected_q_value.detach()
         return td_error
 

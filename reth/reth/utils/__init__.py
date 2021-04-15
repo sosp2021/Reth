@@ -2,6 +2,7 @@ import logging
 import sys
 from .interval import Interval
 from .schedule import Schedule
+from .nstep_adder import NStepAdder
 
 
 def getLogger(name, level=logging.DEBUG):

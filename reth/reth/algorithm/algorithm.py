@@ -11,7 +11,7 @@ class Algorithm:
             else:
                 device = torch.device("cpu")
         self.device = device
-        print("Init model.")
+        # print("Model initialized")
 
     @abstractmethod
     def update(self, batch, weights=None):

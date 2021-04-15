@@ -2,58 +2,37 @@ import multiprocessing as mp
 import time
 
 import numpy as np
-import torch
-
-import reverb
-import tensorflow as tf
-
-import reth_buffer
-from reth.algorithm.prioritized_buffer import PRB2
 
 BATCH_SIZE = 64
 CAPACITY = 10000
 TEST_CNT = 1000
 
-if __name__ == "__main__":
-    print("initializing...")
-    mp.set_start_method("spawn", force=True)
-    data = []
-    data.extend(np.random.rand(CAPACITY, 1, 84, 84) * 20 for _ in range(2))
-    data.extend(np.random.rand(CAPACITY) * 20 for _ in range(2))
 
-    print("TEST TORCH_BUFFER")
-    prb2 = PRB2(CAPACITY, BATCH_SIZE)
-    for i in range(CAPACITY):
-        prb2.append(*[col[i] for col in data], 1)
-    # init
-    *items, indices, weights = prb2.sample()
-    items = [x.cuda() for x in items]
-    print("ready")
-    t0 = time.perf_counter()
-    for _ in range(TEST_CNT):
-        *items, indices, weights = prb2.sample()
-        items = [x.cuda() for x in items]
-    t1 = time.perf_counter()
-    print(TEST_CNT, t1 - t0)
+def test_reth_buffer(data):
+    import reth_buffer
+
     print("TEST RETH_BUFFER")
-    print("reth_zmq")
-    buffer_process = reth_buffer.start_server(
-        batch_size=BATCH_SIZE, buffer_capacity=CAPACITY, server_type="zmq"
-    )
-    client = reth_buffer.connect()
-    fut = client.append(*data)
-    fut.result()
+    print("initializing...")
+    buffer_process, addr = reth_buffer.start_server(CAPACITY, BATCH_SIZE)
+    client = reth_buffer.Client(addr)
+    client.append(data, np.ones(CAPACITY))
+    # loader = reth_buffer.TorchCudaLoader(addr)
+    loader = reth_buffer.NumpyLoader(addr)
     # init
-    *items, indices, weights = client.sample(silent=True)
-    cdata = [torch.tensor(x, device="cuda") for x in items]
+    loader.sample()
     print("ready")
     t0 = time.perf_counter()
     for _ in range(TEST_CNT):
-        *items, indices, weights = client.sample(silent=True)
-        cdata = [torch.tensor(x, device="cuda") for x in items]
+        loader.sample()
     t1 = time.perf_counter()
     print(TEST_CNT, t1 - t0)
     buffer_process.terminate()
+    buffer_process.join()
+
+
+def test_reverb(data):
+    import reverb
+    import tensorflow as tf
 
     print("TEST REVERB")
     print("initializing...")
@@ -91,3 +70,19 @@ if __name__ == "__main__":
         pass
     t1 = time.perf_counter()
     print(TEST_CNT, t1 - t0)
+
+
+def main():
+    print("init data...")
+    data = []
+    data.extend(np.random.rand(CAPACITY, 1, 84, 84) * 20 for _ in range(2))
+    data.extend(np.random.rand(CAPACITY) * 20 for _ in range(2))
+
+    test_reth_buffer(data)
+
+    # test_reverb(data)
+
+
+if __name__ == "__main__":
+    mp.set_start_method("spawn", force=True)
+    main()

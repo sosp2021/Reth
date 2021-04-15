@@ -6,7 +6,7 @@ authors = ["reth <sosp20212021@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.6"
-numba = "^0.51.2"
+numba = "^0.53.0"
 numpy = "^1.19.2"
 readerwriterlock = "^1.0.7"
 gym = "^0.17.3"

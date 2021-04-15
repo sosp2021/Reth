@@ -1,13 +1,18 @@
 import asyncio
+import os
 
 import asyncssh
+import portpicker
+from perwez.utils import get_local_ip
 
-WORKER_ENDPOINTS = ["10.0.0.1:234"]
-TRAINER_ENDPOINT = "10.0.0.2:345"
-PERWEZ_PORT = 2333
-RB_PORTS = [2334, 2335, 2336, 2337]
-RB_PORTS = [str(port) for port in RB_PORTS]
+BUFFER_SHARDS = 4
 
+TRAINER_ROLE_NAME = "trainer"
+WORKER_ROLE_NAME = "worker"
+WORKER_CNT = int(os.environ.get(f"PAI_TASK_ROLE_TASK_COUNT_{WORKER_ROLE_NAME}"))
+
+TRAINER_ENDPOINT = f"{TRAINER_ROLE_NAME}-0"
+WORKER_ENDPOINTS = [f"{WORKER_ROLE_NAME}-{i}" for i in range(WORKER_CNT)]
 
 WORKER_COMMAND = "python ~/reth/test/apex-dqn/worker.py -r {} -s {} -p {} -rb {}"
 
@@ -29,24 +34,9 @@ async def handle_output(prefix, stream):
         await QUEUE.put(f"{prefix} {line}")
 
 
-def parse_endpoint(ep):
-    if ":" not in ep:
-        host = ep
-        port = 22
-    else:
-        host, port = ep.split(":")
-    if "@" not in host:
-        user = "root"
-        addr = host
-    else:
-        user, addr = host.split("@")
-    return user, addr, port
-
-
 async def run(name, ep, command):
-    user, addr, port = parse_endpoint(ep)
     async with asyncssh.connect(
-        addr, username=user, port=int(port), known_hosts=None
+        ep, known_hosts=None, config="/etc/ssh/ssh_config"
     ) as conn:
         async with conn.create_process(command) as proc:
             await asyncio.gather(
@@ -56,13 +46,16 @@ async def run(name, ep, command):
 
 
 async def main_async():
-    _, addr, _ = parse_endpoint(TRAINER_ENDPOINT)
+    local_ip = get_local_ip()
+    perwez_port = portpicker.pick_unused_port()
+    rb_ports = [str(portpicker.pick_unused_port()) for _ in range(BUFFER_SHARDS)]
+
     tasks = []
     tasks.append(
         run(
             "trainer",
             TRAINER_ENDPOINT,
-            TRAINER_COMMAND.format(PERWEZ_PORT, " ".join(RB_PORTS)),
+            TRAINER_COMMAND.format(perwez_port, " ".join(rb_ports)),
         )
     )
     for i, ep in enumerate(WORKER_ENDPOINTS):
@@ -73,8 +66,8 @@ async def main_async():
                 WORKER_COMMAND.format(
                     i,
                     len(WORKER_ENDPOINTS),
-                    f"http://{addr}:{PERWEZ_PORT}",
-                    " ".join([f"tcp://{addr}:{port}" for port in RB_PORTS]),
+                    f"http://{local_ip}:{perwez_port}",
+                    " ".join([f"tcp://{local_ip}:{port}" for port in rb_ports]),
                 ),
             )
         )

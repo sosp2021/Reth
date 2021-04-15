@@ -14,7 +14,7 @@ description = ""
 authors = ["reth <sosp20212021@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.6"
+python = ">=3.6 <3.10"
 reth = {path = "./reth", develop = true}
 perwez = {path = "./perwez", develop = true}
 reth_buffer = {path = "./reth_buffer", develop = true}

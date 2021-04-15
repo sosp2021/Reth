@@ -2,7 +2,8 @@ common:
   batch_size: 512
   rollout_batch_size: 40
   num_workers: 16
-  sync_weights_interval: 10
+  send_weights_interval: 10
+  recv_weights_interval: 400
 env:
   name: BeamRiderNoFrameskip-v4 
   #name: QbertNoFrameskip-v4 
@@ -17,6 +18,7 @@ solver:
   learning_rate: 0.0001
   adam_epsilon: .00015
   update_target_interval: 100
+  n_step: 3
 worker:
   exploration: 0 #per_worker_epsilon_greedy
   print_interval: 10000
